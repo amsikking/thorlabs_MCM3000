@@ -11,18 +11,20 @@ class Controller:
     '''
     def __init__(self,
                  which_port,
+                 name='MCM3000',
                  stages=3*(None,),
                  reverse=3*(False,),
                  verbose=True,
                  very_verbose=False):
+        self.name = name
         self.verbose = verbose
         self.very_verbose = very_verbose
-        if self.verbose: print("Opening MCM3000 controller...", end='')
+        if self.verbose: print("%s: opening..."%self.name, end='')
         try:
             self.port = serial.Serial(port=which_port, baudrate=460800)
         except serial.serialutil.SerialException:
             raise IOError(
-                'No connection to MCM3000 controller on port %s'%which_port)
+                '%s: no connection on port %s'%(self.name, which_port))
         if self.verbose: print(" done.")
         assert type(stages) == tuple and type(reverse) == tuple
         assert len(stages) == 3 and len(reverse) == 3
@@ -40,23 +42,27 @@ class Controller:
         for channel, stage in enumerate(stages):
             if stage is not None:
                 assert stage in supported_stages, (
-                    'stage \'%s\' not supported'%stage)
+                    '%s: stage \'%s\' not supported'%(self.name, stage))
                 self._stage_limit_um[channel] = supported_stages[stage][0]
                 self._stage_conversion_um[channel] = supported_stages[stage][1]
                 self._current_encoder_value[channel] = (
                     self._get_encoder_value(channel))
         if self.verbose:
-            print("stages:", self.stages)
-            print("channels:", self.channels)
-            print("reverse:", self.reverse)
-            print("stage_limit_um:", self._stage_limit_um)
-            print("stage_conversion_um:", self._stage_conversion_um)
-            print("current_encoder_value:", self._current_encoder_value)
+            print("%s: stages:"%self.name, self.stages)
+            print("%s: channels:"%self.name, self.channels)
+            print("%s: reverse:"%self.name, self.reverse)
+            print("%s: stage_limit_um:"%self.name, self._stage_limit_um)
+            print("%s: stage_conversion_um:"%self.name,
+                  self._stage_conversion_um)
+            print("%s: current_encoder_value:"%self.name,
+                  self._current_encoder_value)
 
     def _send(self, cmd, channel, response_bytes=None):
-        assert channel in self.channels, 'Channel \'%s\' not available'%channel
+        assert channel in self.channels, (
+            '%s: channel \'%s\' not available'%(self.name, channel))
         assert self.stages[channel] is not None, (
-            'Channel %s: stage = None (cannot send command)'%channel)
+            '%s: channel %s: stage = None (cannot send command)'%(
+                self.name, channel))
         self.port.write(cmd)
         if response_bytes is not None:
             response = self.port.read(response_bytes)
@@ -73,8 +79,8 @@ class Controller:
         encoder_value = int.from_bytes(
             response[-4:], byteorder='little', signed=True)
         if self.very_verbose:
-            print('\nChannel %s: stage encoder value = %i'%(
-                channel, encoder_value))
+            print('\n%s: ch%s -> stage encoder value = %i'%(
+                self.name, channel, encoder_value))
         return encoder_value
 
     def _set_encoder_value_to_zero(self, channel):
@@ -87,14 +93,13 @@ class Controller:
         cmd = b'\x09\x04\x06\x00\x00\x00' + channel_byte + encoder_bytes
         self._send(cmd, channel)
         if self.verbose:
-            print('Channel %s: waiting for encoder to acknowledge'%channel,
-                  're-set to zero')
+            print('%s: ch%s -> waiting for re-set to zero'%(self.name, channel))
         while True:
             if encoder_value == 0: break
             encoder_value = self._get_encoder_value(channel)
         self._current_encoder_value[channel] = 0
         if self.verbose:
-            print('Channel %s: done with encoder re-set'%channel)
+            print('%s: ch%s -> done with encoder re-set'%(self.name, channel))
         return None
 
     def _move_to_encoder_value(self, channel, encoder_value, block=True):
@@ -106,8 +111,8 @@ class Controller:
         self._send(cmd, channel)
         self._pending_encoder_value[channel] = encoder_value
         if self.very_verbose:
-            print('Channel %s: moving stage encoder to value = %i'%(
-                channel, encoder_value))
+            print('%s: ch%s -> moving stage encoder to value = %i'%(
+                self.name, channel, encoder_value))
         if block:
             self._finish_move(channel)
         return None
@@ -126,8 +131,8 @@ class Controller:
         current_position_um = self._um_from_encoder_value(
             channel, current_encoder_value)
         if self.verbose:
-            print('\nChannel %s: finished moving to position_um = %0.2f'%(
-                channel, current_position_um))
+            print('\n%s: ch%s -> finished moving to position_um = %0.2f'%(
+                self.name, channel, current_position_um))
         self._pending_encoder_value[channel] = None
         return current_encoder_value, current_position_um
 
@@ -145,8 +150,8 @@ class Controller:
         encoder_value = self._get_encoder_value(channel)
         position_um = self._um_from_encoder_value(channel, encoder_value)
         if self.verbose:
-            print('Channel %s: stage position_um = %0.2f'%(
-                channel, position_um))
+            print('%s: ch%s -> stage position_um = %0.2f'%(
+                self.name, channel, position_um))
         return position_um
 
     def legalize_move_um(self, channel, move_um, relative=True, verbose=True):
@@ -159,20 +164,21 @@ class Controller:
         target_move_um = self._um_from_encoder_value(channel, encoder_value)
         limit_um = self._stage_limit_um[channel]
         assert -limit_um < target_move_um < limit_um, (
-            'requested move_um (%0.2f) exceeds limit_um (%0.2f)'%(
-                target_move_um, limit_um))
+            '%s: ch%s -> requested move_um (%0.2f) exceeds limit_um (%0.2f)'%(
+                self.name, channel, target_move_um, limit_um))
         legal_move_um = target_move_um
         if verbose:
-            print('Legalized move_um: %0.2f (%0.2f requested, relative=%s)'%(
-                legal_move_um, move_um, relative))
+            print('%s: ch%s -> legalized move_um = %0.2f '%(
+                self.name, channel, legal_move_um) +
+                  '(%0.2f requested, relative=%s)'%(move_um, relative))
         return legal_move_um
 
     def move_um(self, channel, move_um, relative=True, block=True):
         legal_move_um = self.legalize_move_um(
             channel, move_um, relative, verbose=False)
         if self.verbose:
-            print('Channel %s: moving to position_um = %0.2f'%(
-                channel, legal_move_um), end='')
+            print('%s: ch%s -> moving to position_um = %0.2f'%(
+                self.name, channel, legal_move_um), end='')
         encoder_value = self._encoder_value_from_um(channel, legal_move_um)
         self._move_to_encoder_value(channel, encoder_value, block)
         if block:
@@ -182,7 +188,7 @@ class Controller:
         return legal_move_um
 
     def close(self):
-        if self.verbose: print("Closing MCM3000 controller...", end=' ')
+        if self.verbose: print("%s: closing..."%self.name, end=' ')
         self.port.close()
         if self.verbose: print("done.")
         return None
@@ -190,7 +196,7 @@ class Controller:
 if __name__ == '__main__':
     channel = 2
     stage_controller = Controller(
-        'COM4',stages=(None, None, 'ZFM2030'),reverse=(False, False, True))
+        'COM4',stages=(None, None, 'ZFM2030'), reverse=(False, False, True))
 
     print('\n# Get position:')
     stage_controller.get_position_um(channel)
