@@ -21,7 +21,8 @@ class Controller:
         self.very_verbose = very_verbose
         if self.verbose: print("%s: opening..."%self.name, end='')
         try:
-            self.port = serial.Serial(port=which_port, baudrate=460800)
+            self.port = serial.Serial(
+                port=which_port, baudrate=460800, timeout=5)
         except serial.serialutil.SerialException:
             raise IOError(
                 '%s: no connection on port %s'%(self.name, which_port))
