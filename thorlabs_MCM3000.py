@@ -62,7 +62,7 @@ class Controller:
         um = encoder_counts * self._um_per_count[channel]
         if self.reverse[channel]: um = - um + 0 # +0 avoids -0.0
         if self.very_verbose:
-            print('%s: ch%s -> encoder counts %i = %0.2fum'%(
+            print('%s(ch%s): -> encoder counts %i = %0.2fum'%(
                 self.name, channel, encoder_counts, um))
         return um
 
@@ -71,7 +71,7 @@ class Controller:
         if self.reverse[channel]:
             encoder_counts = - encoder_counts + 0 # +0 avoids -0.0
         if self.very_verbose:
-            print('%s: ch%s -> %0.2fum = encoder counts %i'%(
+            print('%s(ch%s): -> %0.2fum = encoder counts %i'%(
                 self.name, channel, um, encoder_counts))
         return encoder_counts
 
@@ -79,7 +79,7 @@ class Controller:
         assert channel in self.channels, (
             '%s: channel \'%s\' is not available'%(self.name, channel))
         if self.very_verbose:
-            print('%s: ch%s -> sending cmd: %s'%(self.name, channel, cmd))
+            print('%s(ch%s): sending cmd: %s'%(self.name, channel, cmd))
         self.port.write(cmd)
         if response_bytes is not None:
             response = self.port.read(response_bytes)
@@ -87,12 +87,12 @@ class Controller:
             response = None
         assert self.port.inWaiting() == 0
         if self.very_verbose:
-            print('%s: ch%s -> response: %s'%(self.name, channel, response))
+            print('%s(ch%s): -> response: %s'%(self.name, channel, response))
         return response
 
     def _get_encoder_counts(self, channel):
         if self.very_verbose:
-            print('%s: ch%s -> getting encoder counts'%(self.name, channel))
+            print('%s(ch%s): getting encoder counts'%(self.name, channel))
         channel_byte = channel.to_bytes(1, byteorder='little')
         cmd = b'\x0a\x04' + channel_byte + b'\x00\x00\x00'
         response = self._send(cmd, channel, response_bytes=12)
@@ -100,7 +100,7 @@ class Controller:
         encoder_counts = int.from_bytes(
             response[-4:], byteorder='little', signed=True)
         if self.very_verbose:
-            print('%s: ch%s -> encoder counts = %i'%(
+            print('%s(ch%s): -> encoder counts = %i'%(
                 self.name, channel, encoder_counts))
         self._encoder_counts[channel] = encoder_counts
         self.position_um[channel] = self._encoder_counts_to_um(
@@ -111,7 +111,7 @@ class Controller:
         # WARNING: this device adaptor assumes the stage encoder will be set
         # to zero at the centre of it's range for +- stage_position_limit_um checks
         if self.verbose:
-            print('%s: ch%s -> setting encoder counts to zero'%(
+            print('%s(ch%s): setting encoder counts to zero'%(
                 self.name, channel))
         channel_byte = channel.to_bytes(2, byteorder='little')
         encoder_bytes = (0).to_bytes(4, 'little', signed=True) # set to zero
@@ -122,14 +122,14 @@ class Controller:
             if encoder_counts == 0:
                 break
         if self.verbose:
-            print('%s: ch%s -> done'%(self.name, channel))
+            print('%s(ch%s): -> done'%(self.name, channel))
         return None
 
     def _move_to_encoder_count(self, channel, encoder_counts, block=True):
         if self._target_encoder_counts[channel] is not None:
             self._finish_move(channel)
         if self.very_verbose:
-            print('%s: ch%s -> moving to encoder counts = %i'%(
+            print('%s(ch%s): moving to encoder counts = %i'%(
                 self.name, channel, encoder_counts))
         self._target_encoder_counts[channel] = encoder_counts
         encoder_bytes = encoder_counts.to_bytes(4, 'little', signed=True)
@@ -152,13 +152,13 @@ class Controller:
             if target - tolerance <= encoder_counts <= target + tolerance:
                 break
         if self.verbose:
-            print('\n%s: ch%s -> finished move.'%(self.name, channel))
+            print('\n%s(ch%s): -> finished move.'%(self.name, channel))
         self._target_encoder_counts[channel] = None
         return None
 
     def _legalize_move_um(self, channel, move_um, relative):
         if self.verbose:
-            print('%s: ch%s -> requested move_um = %0.2f (relative=%s)'%(
+            print('%s(ch%s): requested move_um = %0.2f (relative=%s)'%(
                 self.name, channel, move_um, relative))
         if relative:
             move_um += self.position_um[channel]
@@ -169,31 +169,20 @@ class Controller:
         move_counts = self._um_to_encoder_counts(channel, move_um)
         legal_move_um = self._encoder_counts_to_um(channel, move_counts)
         if self.verbose:
-            print('%s: ch%s -> legal move_um = %0.2f '%(
+            print('%s(ch%s): -> legal move_um = %0.2f '%(
                 self.name, channel, legal_move_um) +
                   '(%0.2f requested, relative=%s)'%(move_um, relative))
         return legal_move_um
 
-    def get_position_um(self, channel):
-        encoder_counts = self._get_encoder_counts(channel)
-        position_um = self._encoder_counts_to_um(channel, encoder_counts)
-        if self.verbose:
-            print('%s: ch%s -> stage position_um = %0.2f'%(
-                self.name, channel, position_um))
-        self.position_um[channel] = position_um
-        return position_um
-
     def move_um(self, channel, move_um, relative=True, block=True):
         legal_move_um = self._legalize_move_um(channel, move_um, relative)
         if self.verbose:
-            print('%s: ch%s -> moving to position_um = %0.2f'%(
+            print('%s(ch%s): moving to position_um = %0.2f'%(
                 self.name, channel, legal_move_um))
         encoder_counts = self._um_to_encoder_counts(channel, legal_move_um)
         self._move_to_encoder_count(channel, encoder_counts, block)
         if block:
             self._finish_move(channel)
-        else:
-            print('\n')
         return legal_move_um
 
     def close(self):
@@ -208,7 +197,7 @@ if __name__ == '__main__':
                             stages=(None, None, 'ZFM2030'),
                             reverse=(False, False, True),
                             verbose=True,
-                            very_verbose=True)
+                            very_verbose=False)
 
     # re-set zero:
 ##    controller.move_um(channel, 10)
