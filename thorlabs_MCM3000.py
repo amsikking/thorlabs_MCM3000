@@ -38,9 +38,11 @@ class Controller:
         self._um_per_count = 3*[None]
         self._position_limit_um = 3*[None]
         self.position_um = 3*[None]
+
         supported_stages = { # 'Type': (_um_per_count, +- _position_limit_um, )
-            'ZFM2020':( 0.2116667, 1e3 * 12.7),
-            'ZFM2030':( 0.2116667, 1e3 * 12.7),}
+                        'ZFM2020':( 0.2116667, 1e3 * 12.7),
+                        'ZFM2030':( 0.2116667, 1e3 * 12.7),
+                        'MMP-2XY':(0.5, 1e3 * 25.4)}
         self.channels = []
         for channel, stage in enumerate(self.stages):
             if stage is not None:
