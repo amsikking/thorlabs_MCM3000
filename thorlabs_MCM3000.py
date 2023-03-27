@@ -165,7 +165,7 @@ class Controller:
         if relative:
             move_um += self.position_um[channel]
         limit_um = self._position_limit_um[channel]
-        assert - limit_um < move_um < limit_um, (
+        assert - limit_um <= move_um <= limit_um, (
             '%s: ch%s -> move_um (%0.2f) exceeds position_limit_um (%0.2f)'%(
                 self.name, channel, move_um, limit_um))
         move_counts = self._um_to_encoder_counts(channel, move_um)
