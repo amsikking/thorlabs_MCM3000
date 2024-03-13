@@ -163,6 +163,9 @@ class Controller:
             print('%s(ch%s): requested move_um = %0.2f (relative=%s)'%(
                 self.name, channel, move_um, relative))
         if relative:
+            # do the relative move from the latest position (in case there's an external controller),
+            # so let's re-read it now and update the right channel self.position_um
+            self.position_um[channel] = self.get_position_um(channel)
             move_um += self.position_um[channel]
         limit_um = self._position_limit_um[channel]
         assert - limit_um <= move_um <= limit_um, (
@@ -186,6 +189,14 @@ class Controller:
         if block:
             self._finish_move(channel)
         return legal_move_um
+
+    def get_position_um(self, channel):
+        encoder_counts_this_channel = self._get_encoder_counts(channel)
+        position_um_this_channel = self._encoder_counts_to_um(channel, encoder_counts_this_channel)
+        if self.verbose:
+            print('%s: ch%s -> stage position_um = %0.2f'%(
+                self.name, channel, position_um_this_channel))
+        return position_um_this_channel
 
     def close(self):
         if self.verbose: print("%s: closing..."%self.name, end=' ')
